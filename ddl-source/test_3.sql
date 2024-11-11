@@ -1,4 +1,4 @@
-CREATE TABLE schema.test_table_1 (
+CREATE TABLE schema.test_table_3 (
    id integer PRIMARY KEY,
    name varchar(30) NOT NULL,
    ext_id text,
