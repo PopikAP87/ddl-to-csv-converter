@@ -1,0 +1,57 @@
+@startuml
+
+!theme plain
+hide empty methods
+
+!procedure $schema($name, $slug)
+package "$name" as $slug <<Rectangle>>
+!endprocedure
+
+!procedure $table($name, $slug)
+entity "<b>$name</b>" as $slug << (T, Orange) table >>
+!endprocedure
+
+!procedure $view($name, $slug)
+entity "<b>$name</b>" as $slug << (V, Aquamarine) view >>
+!endprocedure
+
+!procedure $pk($name)
+<color:#GoldenRod><&key></color> <b>$name</b>
+!endprocedure
+
+!procedure $fk($name)
+<color:#Silver><&key></color> $name
+!endprocedure
+
+!procedure $pfk($name)
+<color:#GoldenRod><&key></color><color:#Silver><&key></color> <b>$name</b>
+!endprocedure
+
+!procedure $column($name)
+{field} <color:#White><&media-record></color> $name
+!endprocedure
+
+$schema("Test_CH", "test_schema") {
+
+    $table("test_1", "test_1_table") {
+        $pk("id"): text
+        $pfk("name"): text not null
+        $column("creator_id"): uuid not null
+        $column("editor_id"): uuid
+        $column("created"): timestampz DEFAULT now() NOT NULL
+        $column("updated"): timestampz
+    }
+
+    $table("test_2", "test_2_table") {
+        $pk("id"): text
+        $column("name"): text not null
+        $column("creator_id"): uuid not null
+        $column("editor_id"): uuid
+        $column("created"): timestampz DEFAULT now() NOT NULL
+        $column("updated"): timestampz
+        }
+}
+
+test_schema.test_1_table::fk ||--o{ test_schema.test_2_table::id : fk_te
+
+@enduml

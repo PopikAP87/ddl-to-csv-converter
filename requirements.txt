@@ -1,4 +1,3 @@
-ddlparse
 csv
 pathlib
 simple-ddl-parser

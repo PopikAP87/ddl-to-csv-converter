@@ -6,65 +6,102 @@ SOURCE_DIR = '../ddl-source/'
 TARGET_DIR = '../csv-target/'
 
 
-def get_row_constraints(statement_constraints, row):
+# Получение констрейнов для колонки
+def get_row_constraints(statement_constraints, column):
     constraints = []
-    row_name = row['name']
+    column_name = column['name']
     if 'primary_keys' in statement_constraints:
         for pk in statement_constraints['primary_keys']:
-            if row_name in pk['columns']:
+            if column_name in pk['columns']:
                 constraints.append('PK')
     if 'references' in statement_constraints:
         for fk in statement_constraints['references']:
-            if row_name == fk['name']:
+            if column_name == fk['name']:
                 constraints.append('FK')
-    if row['nullable'] is True:
+    if column['nullable'] is True:
         constraints.append('NOT NULL')
-    if row['unique'] is True:
+    if column['unique'] is True:
         constraints.append('UNIQUE')
-    if row['default'] is not None:
-        constraints.append('DEFAULT ' + row['default'])
+    if column['default'] is not None:
+        constraints.append('DEFAULT ' + column['default'])
     constraints = list(dict.fromkeys(constraints))
     result = "\n".join(str(element) for element in constraints)
     return result
 
 
-def get_row_type_with_len(row):
-    if row['size'] is not None:
-        result = '{}({})'.format(row['type'], str(row['size']))
+# Получение типа данных с длиной для колонки
+def get_row_type_with_len(column):
+    if column['size'] is not None:
+        result = '{}({})'.format(column['type'], str(column['size']))
     else:
-        result = row['type']
+        result = column['type']
     return result
 
 
-def get_row_check_list(row):
-    if row['check'] is not None:
-        result = 'Возможные значения: {}'.format(row['check'])
+# Получение возможных значений для колонки
+def get_row_check_list(column):
+    if column['check'] is not None:
+        result = 'Возможные значения: {}'.format(column['check'])
     else:
         result = ''
     return result
 
 
-# Находим все sql файлы в SOURCE_DIR
-ddlFilesList = [f for f in Path().glob(SOURCE_DIR + "*.sql")]
+# Создание данных для записи в csv описания таблицы
+def create_csv_data(statement):
+    result = [['Имя поля', 'Тип', 'Описание', 'Ограничения']]
+    for row in statement['columns']:
+        result.append(
+            [row['name'],
+             get_row_type_with_len(row),
+             get_row_check_list(row),
+             get_row_constraints(statement['constraints'], row)]
+        )
+    return result
 
-for filePath in ddlFilesList:
-    # Чтение и парсинг файла
-    ddlFile = open(filePath, 'r').read()
-    ddlParsList = DDLParser(ddlFile).run(output_mode="postgres")
-    print('Read SQL file: {}'.format(filePath.name))
-    if len(ddlParsList) != 0:
-        for statement in ddlParsList:
-            # Создание данных для записи
-            firs_row = ['Имя поля', 'Тип', 'Описание', 'Ограничения']
-            csv_data = [firs_row]
-            for row in statement['columns']:
-                row_constraint = get_row_constraints(statement['constraints'], row)
-                row_type_with_len = get_row_type_with_len(row)
-                row_check_list = get_row_check_list(row)
-                csv_data.append([row['name'], row_type_with_len, row_check_list, row_constraint])
-            # Запись файла csv для каждой таблицы
-            with Path('{}{}_{}.csv'.format(TARGET_DIR, statement['schema'], statement['table_name'])).open('w', newline='') as outfile:
-                writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC, lineterminator='\n')
-                writer.writerows(csv_data)
-            print('Write CSV file: {}_{}.csv'.format(statement['schema'], statement['table_name']))
-            print('=====================\n')
+
+# Получение распршеных выражений для всех файлов
+def get_all_statements(list_of_sql_files):
+    result = []
+    for file_path in list_of_sql_files:
+        ddl_file = open(file_path, 'r').read()
+        ddl_pars_list = DDLParser(ddl_file).run(output_mode="postgres")
+        if len(ddl_pars_list) == 0:
+            print('!!! Error pars SQL from file: {}'.format(file_path.name))
+            return False
+        for statement in ddl_pars_list:
+            result.append(statement)
+    return result
+
+
+# Создание csv файлов по ddl запросам в SOURCE_DIR
+def write_csv(sql_statements):
+    for statement in sql_statements:
+        csv_data = create_csv_data(statement)
+        with Path('{}{}_{}.csv'.format(TARGET_DIR,
+                                       statement['schema'],
+                                       statement['table_name']
+                                       )
+                  ).open('w', newline='') as outfile:
+            writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC, lineterminator='\n')
+            writer.writerows(csv_data)
+        print('Write CSV file: {}_{}.csv'.format(statement['schema'], statement['table_name']))
+        print('=====================\n')
+
+
+def write_erd(sql_statements):
+    for statement in sql_statements:
+
+        return False
+
+
+# Находим все sql файлы в SOURCE_DIR
+list_of_files = [f for f in Path().glob(SOURCE_DIR + "*.sql")]
+if len(list_of_files) == 0:
+    print('No sql files in directory: {}'.format(SOURCE_DIR))
+    exit()
+statements = get_all_statements(list_of_files)
+if not statements:
+    print('No sql statement in directory: {}'.format(SOURCE_DIR))
+    exit()
+write_csv(statements)

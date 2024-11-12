@@ -1,4 +1,4 @@
-CREATE TABLE schema.test_table_2 (
+CREATE TABLE schema_2.test_table_7 (
    id integer NOT NULL,
    name text NOT NULL,
    ext_id text NOT NULL
