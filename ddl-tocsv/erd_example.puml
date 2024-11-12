@@ -49,7 +49,7 @@ $schema("Test_CH", "test_schema") {
         $column("editor_id"): uuid
         $column("created"): timestampz DEFAULT now() NOT NULL
         $column("updated"): timestampz
-        }
+    }
 }
 
 test_schema.test_1_table::fk ||--o{ test_schema.test_2_table::id : fk_te
