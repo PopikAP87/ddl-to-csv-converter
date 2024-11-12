@@ -9,12 +9,14 @@ TARGET_DIR = '../csv-target/'
 def get_row_constraints(statement_constraints, row):
     constraints = []
     row_name = row['name']
-    for pk in statement_constraints['primary_keys']:
-        if row_name in pk['columns']:
-            constraints.append('PK')
-    for fk in statement_constraints['references']:
-        if row_name == fk['name']:
-            constraints.append('FK')
+    if 'primary_keys' in statement_constraints:
+        for pk in statement_constraints['primary_keys']:
+            if row_name in pk['columns']:
+                constraints.append('PK')
+    if 'references' in statement_constraints:
+        for fk in statement_constraints['references']:
+            if row_name == fk['name']:
+                constraints.append('FK')
     if row['nullable'] is True:
         constraints.append('NOT NULL')
     if row['unique'] is True:
@@ -50,7 +52,7 @@ for filePath in ddlFilesList:
     ddlFile = open(filePath, 'r').read()
     ddlParsList = DDLParser(ddlFile).run(output_mode="postgres")
     print('Read SQL file: {}'.format(filePath.name))
-    if ddlParsList is not None:
+    if len(ddlParsList) != 0:
         for statement in ddlParsList:
             # Создание данных для записи
             firs_row = ['Имя поля', 'Тип', 'Описание', 'Ограничения']
