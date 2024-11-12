@@ -38,27 +38,7 @@ entity "<b>$name</b>" as $slug << (V, Aquamarine) view >>
 {field} <color:#White><&media-record></color> $name
 !endprocedure
 '''
-ERD_END = '''
-@enduml
-'''
-ERD_SCHEMA = '''
-$schema("{name}", "{alias}") '''
-ERD_SCHEMA_END = '''
-}
-'''
-ERD_TABLE = '''
-    $table("{name}", "{alias}") '''
-ERD_TABLE_END = '''
-    }
-'''
-ERD_COLUMN = '''
-        ${type}("{name}"): {data_type} {constrains}'''
-ERD_RELATION_FROM = '''
-{source_schema}.{source_table}::{source_column}'''
-ERD_RELATION_TO = '''{target_schema}.{target_table}::{target_column} : {fk_title}
-'''
-ERD_RELATION_LINE = ' ||--o{ '
-
+log_num = 1
 
 # Получение констрейнов для колонки
 def get_row_constraints(statement_constraints, column):
@@ -78,8 +58,7 @@ def get_row_constraints(statement_constraints, column):
         constraints.append('UNIQUE')
     if column['default'] is not None:
         constraints.append('DEFAULT ' + column['default'])
-    constraints = list(dict.fromkeys(constraints))
-    result = "\n".join(str(element) for element in constraints)
+    result = list(dict.fromkeys(constraints))
     return result
 
 
@@ -109,7 +88,7 @@ def create_csv_data(statement):
             [row['name'],
              get_row_type_with_len(row),
              get_row_check_list(row),
-             get_row_constraints(statement['constraints'], row)]
+             '\n'.join(str(e) for e in get_row_constraints(statement['constraints'], row))]
         )
     return result
 
@@ -130,6 +109,7 @@ def get_all_statements(list_of_sql_files):
 
 # Создание csv файлов по ddl запросам в SOURCE_DIR
 def write_csv(sql_statements):
+    global log_num
     for statement in sql_statements:
         csv_data = create_csv_data(statement)
         with Path('{}{}_{}.csv'.format(TARGET_DIR,
@@ -139,26 +119,82 @@ def write_csv(sql_statements):
                   ).open('w', newline='') as outfile:
             writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC, lineterminator='\n')
             writer.writerows(csv_data)
-        print('Write CSV file: {}_{}.csv'.format(statement['schema'], statement['table_name']))
+        print('{}. Write CSV file: {}_{}.csv'.format(log_num, statement['schema'], statement['table_name']))
+        log_num += 1
         print('=====================\n')
 
 
+def get_erd_table(sql_statement):
+    erd_table = '\n    $table("{name}", "{alias}") '
+    erd_table_end = '\n    }\n'
+    erd_column = '\n        ${type}("{name}"): {data_type} {constrains}'
+    table = erd_table.format(
+        name=sql_statement['table_name'],
+        alias=sql_statement['table_name']
+    ) + '{'
+    for column in sql_statement['columns']:
+        constrains = get_row_constraints(sql_statement['constraints'], column)
+        if 'PK' in constrains and 'FK' not in constrains:
+            c_type = 'pk'
+        elif 'PK' not in constrains and 'FK' in constrains:
+            c_type = 'fk'
+        elif 'PK' in constrains and 'FK' in constrains:
+            c_type = 'pfk'
+        else:
+            c_type = 'column'
+        table += erd_column.format(
+            type=c_type,
+            name=column['name'],
+            data_type=get_row_type_with_len(column),
+            constrains=' '.join(str(e) for e in constrains)
+        )
+    table += erd_table_end
+    result = table
+    return result
+
+
+def get_erd_relations(sql_statements):
+    erd_relation_from = '\n{source_schema}.{source_table}::{source_column}'
+    erd_relation_to = '{target_schema}.{target_table}::{target_column} : {fk_title}\n'
+    erd_relation_line = ' ||--o{ '
+    relations = ''
+    for statement in sql_statements:
+        if 'references' in statement['constraints']:
+            for relation in statement['constraints']['references']:
+                relations += erd_relation_from.format(
+                    source_schema=statement['schema'],
+                    source_table=statement['table_name'],
+                    source_column=relation['name']
+                )
+                relations += erd_relation_line
+                relations += erd_relation_to.format(
+                    target_schema=relation['schema'],
+                    target_table=relation['table'],
+                    target_column=relation['columns'][0],
+                    fk_title=relation['constraint_name']
+                )
+    result = relations
+    return result
+
+
 def write_erd(sql_statements):
+    global log_num
     erd = ERD_START
-    # for statement in sql_statements:
-    erd += ERD_SCHEMA.format(name='sch_name', alias='sch_name') + '{\n'
-    erd += ERD_TABLE.format(name='t_name', alias='t_name') + '{'
-    erd += ERD_COLUMN.format(type='pk', name='id', data_type='text', constrains='')
-    erd += ERD_COLUMN.format(type='pfk', name='name', data_type='text', constrains='NOT NULL')
-    erd += ERD_COLUMN.format(type='column', name='created', data_type='timestampz', constrains='DEFAULT now()')
-    erd += ERD_TABLE_END
-    erd += ERD_SCHEMA_END
-    erd += ERD_RELATION_FROM.format(source_schema='sch_name', source_table='t_name', source_column='name')
-    erd += ERD_RELATION_LINE
-    erd += ERD_RELATION_TO.format(target_schema='sch_name', target_table='t_name', target_column='pk', fk_title='fk_test')
-    erd += ERD_END
-    with Path('{}erd.puml'.format(TARGET_DIR)).open('w', encoding='utf-8') as outfile:
+    erd_schema = '\n$schema("{name}", "{alias}") '
+    schemas = list(dict.fromkeys([item['schema'] for item in sql_statements]))
+    for schema in schemas:
+        erd += erd_schema.format(name=schema, alias=schema) + '{\n'
+        schema_tables = [item for item in sql_statements if item['schema'] == schema]
+        for table in schema_tables:
+            erd += get_erd_table(table)
+        erd += '\n}\n'
+    erd += get_erd_relations(sql_statements)
+    erd += '\n@enduml'
+    with Path('{}db_erd.puml'.format(TARGET_DIR)).open('w', encoding='utf-8') as outfile:
         outfile.write(erd)
+    print('{}. Write DB ERD file: db_erd.puml'.format(log_num))
+    log_num += 1
+    print('=====================\n')
 
 
 # Создаем TARGET_DIR и находим все sql файлы в SOURCE_DIR
@@ -171,5 +207,5 @@ statements = get_all_statements(list_of_files)
 if not statements:
     print('No sql statement in directory: {}'.format(SOURCE_DIR))
     exit()
-# write_csv(statements)
+write_csv(statements)
 write_erd(statements)
