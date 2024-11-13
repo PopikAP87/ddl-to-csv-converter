@@ -4,8 +4,8 @@ from simple_ddl_parser import DDLParser
 
 SOURCE_DIR = '../ddl-source/'
 TARGET_DIR = '../csv-target/'
-ERD_START = '''
-@startuml
+TARGET_TABLE_DIR = TARGET_DIR + 'tables/'
+ERD_START = '''@startuml
 
 !theme plain
 hide empty methods
@@ -38,7 +38,43 @@ entity "<b>$name</b>" as $slug << (V, Aquamarine) view >>
 {field} <color:#White><&media-record></color> $name
 !endprocedure
 '''
+DB_DOC_HEADER = '''= БД {db_name}
+:db-name: <Заполнить название базы>
+:service-dir: ./
+ifndef::env-site[]
+:toc-title: Содержание
+:toc:
+
+.Описание БД
+****
+Тут будет описание БД
+****
+
+== ERD БД
+[plantuml, class, format=svg, Interactive, opts=interactive]
+----
+include::{service_dir}db_erd.puml[]
+----
+'''
+DB_DOC_SCHEMA = '''
+== Схема {schema_name}
+TODO схемы {schema_name}
+'''
+DB_DOC_TABLE = '''
+=== {schema_name}.{table_name}
+TODO описание таблицы {table_name}
+
+.Раскрыть
+[%collapsible]
+====
+[%header,format=csv,cols="1a, 1a, 1a, 1a"]
+|===
+include::{service_dir}/tables/{schema_name}_{table_name}.csv[]
+|===
+====
+'''
 log_num = 1
+
 
 # Получение констрейнов для колонки
 def get_row_constraints(statement_constraints, column):
@@ -108,23 +144,24 @@ def get_all_statements(list_of_sql_files):
 
 
 # Создание csv файлов по ddl запросам в SOURCE_DIR
-def write_csv(sql_statements):
+def create_db_csv_files(sql_statements):
     global log_num
+    Path(TARGET_TABLE_DIR).mkdir(parents=True, exist_ok=True)
     for statement in sql_statements:
         csv_data = create_csv_data(statement)
-        with Path('{}{}_{}.csv'.format(TARGET_DIR,
+        with Path('{}{}_{}.csv'.format(TARGET_TABLE_DIR,
                                        statement['schema'],
                                        statement['table_name']
                                        )
                   ).open('w', newline='') as outfile:
             writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC, lineterminator='\n')
             writer.writerows(csv_data)
-        print('{}. Write CSV file: {}_{}.csv'.format(log_num, statement['schema'], statement['table_name']))
+        print('{}. Create CSV file: {}_{}.csv'.format(log_num, statement['schema'], statement['table_name']))
         log_num += 1
         print('=====================\n')
 
 
-def get_erd_table(sql_statement):
+def get_db_erd_table(sql_statement):
     erd_table = '\n    $table("{name}", "{alias}") '
     erd_table_end = '\n    }\n'
     erd_column = '\n        ${type}("{name}"): {data_type} {constrains}'
@@ -153,7 +190,7 @@ def get_erd_table(sql_statement):
     return result
 
 
-def get_erd_relations(sql_statements):
+def get_db_erd_relations(sql_statements):
     erd_relation_from = '\n{source_schema}.{source_table}::{source_column}'
     erd_relation_to = '{target_schema}.{target_table}::{target_column} : {fk_title}\n'
     erd_relation_line = ' ||--o{ '
@@ -177,7 +214,7 @@ def get_erd_relations(sql_statements):
     return result
 
 
-def write_erd(sql_statements):
+def create_db_erd_file(sql_statements):
     global log_num
     erd = ERD_START
     erd_schema = '\n$schema("{name}", "{alias}") '
@@ -186,13 +223,32 @@ def write_erd(sql_statements):
         erd += erd_schema.format(name=schema, alias=schema) + '{\n'
         schema_tables = [item for item in sql_statements if item['schema'] == schema]
         for table in schema_tables:
-            erd += get_erd_table(table)
+            erd += get_db_erd_table(table)
         erd += '\n}\n'
-    erd += get_erd_relations(sql_statements)
+    erd += get_db_erd_relations(sql_statements)
     erd += '\n@enduml'
     with Path('{}db_erd.puml'.format(TARGET_DIR)).open('w', encoding='utf-8') as outfile:
         outfile.write(erd)
-    print('{}. Write DB ERD file: db_erd.puml'.format(log_num))
+    print('{}. Create DB ERD file: db_erd.puml'.format(log_num))
+    log_num += 1
+    print('=====================\n')
+
+
+def create_db_doc_file(sql_statements):
+    global log_num
+    db_doc = DB_DOC_HEADER.format(db_name='{db-name}',
+                                  service_dir='{service-dir}')
+    schemas = list(dict.fromkeys([item['schema'] for item in sql_statements]))
+    for schema in schemas:
+        db_doc += DB_DOC_SCHEMA.format(schema_name=schema)
+        schema_tables = [item for item in sql_statements if item['schema'] == schema]
+        for table in schema_tables:
+            db_doc += DB_DOC_TABLE.format(schema_name=schema,
+                                          table_name=table['table_name'],
+                                          service_dir='{service-dir}')
+    with Path('{}db_doc.adoc'.format(TARGET_DIR)).open('w', encoding='utf-8') as outfile:
+        outfile.write(db_doc)
+    print('{}. Create DB doc file: db_doc.adoc'.format(log_num))
     log_num += 1
     print('=====================\n')
 
@@ -207,5 +263,6 @@ statements = get_all_statements(list_of_files)
 if not statements:
     print('No sql statement in directory: {}'.format(SOURCE_DIR))
     exit()
-write_csv(statements)
-write_erd(statements)
+create_db_csv_files(statements)
+create_db_erd_file(statements)
+create_db_doc_file(statements)
