@@ -1,2 +1,2 @@
-# ddl-to-csv-convertor
+# ddl-to-csv-converter
 Конвертор ddl скриптов в таблицу в формате csv для вставки в документацию проекта
