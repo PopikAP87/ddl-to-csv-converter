@@ -88,7 +88,7 @@ def get_row_constraints(statement_constraints, column):
         for fk in statement_constraints['references']:
             if column_name == fk['name']:
                 constraints.append('FK')
-    if column['nullable'] is True:
+    if column['nullable'] is False:
         constraints.append('NOT NULL')
     if column['unique'] is True:
         constraints.append('UNIQUE')
@@ -134,7 +134,7 @@ def get_all_statements(list_of_sql_files):
     result = []
     for file_path in list_of_sql_files:
         ddl_file = open(file_path, 'r').read()
-        ddl_pars_list = DDLParser(ddl_file).run(output_mode="postgres")
+        ddl_pars_list = DDLParser(ddl_file, normalize_names=True).run(output_mode="postgres")
         if len(ddl_pars_list) == 0:
             print('!!! Error pars SQL from file: {}'.format(file_path.name))
             return False
